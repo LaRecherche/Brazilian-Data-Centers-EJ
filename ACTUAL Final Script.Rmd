@@ -1,0 +1,393 @@
+---
+title: "EnviroSec Final Script"
+author: "Linden James"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Libraries 
+library(mgcv)
+library(dplyr)
+library(ggplot2)
+library(MASS)
+```
+
+### Load Data + Prelim Checks
+
+```{r}
+# Load Data 
+data_raw <- read.csv("/Users/linde/Downloads/EnviroSec Final Project Stuff/Rio CSV.csv")
+```
+
+```{r}
+# Rename the columns
+data <- data_raw %>%
+  rename(
+    code = CODE,
+    city = Name, 
+    has_dc = Has.DC,
+    pm25 = PM2.5, 
+    dc5 = DC.5km,
+    dc10 = DC.10km,
+    dc15 = DC.15km,
+    hdi = HDI..2010., 
+    wage = Avg.Monthly.Wage..2023., 
+    health_num = Health.Establishments..2009., 
+    avg_dc_years = Mean.Years.Since.DC.Construction)
+```
+
+Assumption Checks:
+
+```{r}
+# Linearity 
+par(mfrow = c(1,3))
+hist(data$dc5,  main = "DCs within 5 km",  xlab = "Count", breaks = 20)
+hist(data$dc10, main = "DCs within 10 km", xlab = "Count", breaks = 20)
+hist(data$dc15, main = "DCs within 15 km", xlab = "Count", breaks = 20)
+par(mfrow = c(1,1))
+```
+
+```{r}
+# Overdispersion 
+dispersion_summary <- data.frame(
+  buffer = c("dc5","dc10","dc15"),
+  mean   = c(mean(data$dc5),  mean(data$dc10),  mean(data$dc15)),
+  var    = c(var(data$dc5),   var(data$dc10),   var(data$dc15)))
+
+dispersion_summary
+```
+
+### 5km Poisson GAM
+
+```{r}
+# Create the model 
+gam_pois_dc5 <- gam(
+  dc5 ~ 
+    s(pm25,       k = 5) +
+    s(hdi,        k = 5) +
+    s(wage,       k = 5) +
+    s(health_num, k = 5), 
+  family = poisson(link = "log"),
+  data   = data,
+  method = "REML")
+
+summary(gam_pois_dc5)
+```
+
+```{r}
+# Check residual overdispersion 
+disp_pois_dc5 <- gam_pois_dc5$deviance / gam_pois_dc5$df.residual
+
+disp_pois_dc5
+```
+
+```{r}
+# Plot 
+plot(gam_pois_dc5, pages = 1, shade = TRUE, main = "5km Poisson GAM")
+```
+
+### 10km Poisson GAM
+
+```{r}
+# Create the model 
+gam_pois_dc10 <- gam(
+  dc10 ~ 
+    s(pm25,       k = 5) +
+    s(hdi,        k = 5) +
+    s(wage,       k = 5) +
+    s(health_num, k = 5), 
+  family = poisson(link = "log"),
+  data   = data,
+  method = "REML")
+
+summary(gam_pois_dc10)
+```
+
+```{r}
+# Check residual overdispersion 
+disp_pois_dc10 <- gam_pois_dc10$deviance / gam_pois_dc10$df.residual
+
+disp_pois_dc10
+```
+
+```{r}
+# Plot 
+plot(gam_pois_dc10, pages = 1, shade = TRUE)
+```
+
+### 15km Poisson GAM
+
+```{r}
+# Create the model 
+gam_pois_dc15 <- gam(
+  dc15 ~ 
+    s(pm25,       k = 5) +
+    s(hdi,        k = 5) +
+    s(wage,       k = 5) +
+    s(health_num, k = 5), 
+  family = poisson(link = "log"),
+  data   = data,
+  method = "REML")
+
+summary(gam_pois_dc15)
+```
+
+```{r}
+# Check residual overdispersion 
+disp_pois_dc15 <- gam_pois_dc15$deviance / gam_pois_dc15$df.residual
+
+disp_pois_dc15
+```
+
+```{r}
+# Plot 
+plot(gam_pois_dc15, pages = 1, shade = TRUE)
+```
+
+### Figures
+
+#### Libraries
+
+```{r}
+library(ggplot2)
+library(tidyr)
+library(scales)
+library(patchwork)
+library(viridis)  
+library(reshape2) 
+library(dplyr)
+```
+
+```{r}
+# Theme + output folder 
+theme_set(theme_minimal(base_size = 13))
+theme_update(
+  panel.grid.minor = element_blank(),
+  plot.title = element_text(face = "bold"),
+  axis.title = element_text(face = "bold"))
+
+out_dir <- "figures_15km"
+if (!dir.exists(out_dir)) dir.create(out_dir)
+
+# Just working with 15 km for simplicity 
+data <- data %>% mutate(has_dc15 = as.integer(dc15 > 0))
+
+# Helper: save function
+ggsave2 <- function(filename, plot, w=8, h=5) {
+  ggsave(file.path(out_dir, filename), plot = plot, width = w, height = h, dpi = 300)}
+
+# Distribution of DC intersect counts 
+p_hist15 <- ggplot(data, aes(x = dc15)) +
+  geom_histogram(binwidth = 1, fill = "#1A9850", color = "white") +
+  labs(
+    title = "Distribution of data center counts (15 km buffer)",
+    x = "Data centers within 15 km",
+    y = "Number of municipalities")
+
+p_hist15
+ggsave2("01_hist_dc15.png", p_hist15, w=8, h=5)
+
+# Distribution of wages
+p_hist_wage <- ggplot(data, aes(x = wage)) +
+  geom_histogram(binwidth = 500, fill = "#1A9850", color = "white") +
+  labs(
+    title = "Distribution of average monthly wage (2023)",
+    x = "Avg monthly wage (BRL)",
+    y = "Number of municipalities") +
+  scale_x_continuous(labels = label_number())
+
+# Distribution of HDI
+p_hist_hdi <- ggplot(data, aes(x = hdi)) +
+  geom_histogram(binwidth = 0.05, fill = "#1A9850", color = "white") +
+  labs(
+    title = "Distribution of HDI (2010)",
+    x = "HDI (2010)",
+    y = "Number of municipalities")
+
+# Distribution of PM2.5
+p_hist_pm25 <- ggplot(data, aes(x = pm25)) +
+  geom_histogram(binwidth = 1, fill = "#1A9850", color = "white") +
+  labs(
+    title = "Distribution of PM2.5",
+    x = "PM2.5",
+    y = "Number of municipalities")
+
+# Distribution of health establishments
+p_hist_health <- ggplot(data, aes(x = health_num)) +
+  geom_histogram(binwidth = 5, fill = "#1A9850", color = "white") +
+  labs(
+    title = "Distribution of health establishments (2009)",
+    x = "Health establishments (2009)",
+    y = "Number of municipalities")
+
+# Put all histograms together 
+(p_hist15 | p_hist_wage) / (p_hist_hdi | p_hist_pm25) / (p_hist_health + plot_layout(guides = "collect"))
+ggsave2("01_histograms_15km.png", (p_hist15 | p_hist_wage) / (p_hist_hdi | p_hist_pm25) / (p_hist_health + plot_layout(guides = "collect")), w=11, h=12)
+
+# Lorenz curve for DC concentration 
+lorenz_df <- function(x) {
+  x <- sort(x, decreasing = FALSE)
+  n <- length(x)
+  tibble(
+    cum_pop = c(0, (1:n)/n),
+    cum_x   = c(0, cumsum(x)/sum(x)))}
+
+lc15 <- lorenz_df(data$dc15)
+
+p_lorenz15 <- ggplot(lc15, aes(x = cum_pop, y = cum_x)) +
+  geom_line(linewidth = 1.1, color = "#1D91C0") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey40") +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Concentration of data centers across municipalities (15 km)",
+    x = "Cumulative share of municipalities",
+    y = "Cumulative share of data centers")
+
+p_lorenz15
+ggsave2("02_lorenz_dc15.png", p_lorenz15, w=7.5, h=5)
+
+
+# Violin plots 
+p_violin_pm25 <- ggplot(data, aes(x = factor(has_dc15), y = pm25, fill = factor(has_dc15))) +
+  geom_violin(trim = FALSE, alpha = 0.7, color = "lightgreen") +
+  geom_boxplot(width = 0.15, outlier.alpha = 0.25, fill = "white") +
+  scale_fill_viridis_d(end = 0.85, guide = "none") +
+  labs(title = "PM2.5 by DC presence (15 km)", x = "Any DC within 15 km", y = "PM2.5")
+
+p_violin_hdi <- ggplot(data, aes(x = factor(has_dc15), y = hdi, fill = factor(has_dc15))) +
+  geom_violin(trim = FALSE, alpha = 0.7, color = NA) +
+  geom_boxplot(width = 0.15, outlier.alpha = 0.25, fill = "white") +
+  scale_fill_viridis_d(end = 0.85, guide = "none") +
+  labs(title = "HDI by DC presence (15 km)", x = "Any DC within 15 km", y = "HDI (2010)")
+
+p_violin_wage <- ggplot(data, aes(x = factor(has_dc15), y = wage, fill = factor(has_dc15))) +
+  geom_violin(trim = FALSE, alpha = 0.7, color = NA) +
+  geom_boxplot(width = 0.15, outlier.alpha = 0.25, fill = "white") +
+  scale_fill_viridis_d(end = 0.85, guide = "none") +
+  labs(title = "Wage by DC presence (15 km)", x = "Any DC within 15 km", y = "Avg monthly wage (2023)") +
+  scale_y_continuous(labels = label_number())
+
+p_violin_health <- ggplot(data, aes(x = factor(has_dc15), y = health_num, fill = factor(has_dc15))) +
+  geom_violin(trim = FALSE, alpha = 0.7, color = NA) +
+  geom_boxplot(width = 0.15, outlier.alpha = 0.25, fill = "white") +
+  scale_fill_viridis_d(end = 0.85, guide = "none") +
+  labs(title = "Health establishments by DC presence (15 km)", x = "Any DC within 15 km", y = "Health establishments (2009)")
+
+(p_violin_pm25 | p_violin_hdi) / (p_violin_wage | p_violin_health)
+ggsave2("03_violin_presence_15km.png", (p_violin_pm25 | p_violin_hdi) / (p_violin_wage | p_violin_health), w=11, h=8)
+
+
+# Scatter plot (like plot(gam_pois_dc15) but fancier)
+p_scatter_pm25 <- ggplot(data, aes(x = pm25, y = dc15)) +
+  geom_point(alpha = 0.7, color = "darkgreen",
+             position = position_jitter(height = 0.15, width = 0)) +
+  geom_smooth(method = "loess", se = TRUE, color = "lightgreen") +
+  labs(title = "DC counts (15 km) vs. PM2.5", x = "PM2.5", y = "DCs within 15 km")
+
+p_scatter_hdi <- ggplot(data, aes(x = hdi, y = dc15)) +
+  geom_point(alpha = 0.7, color = "darkgreen",
+             position = position_jitter(height = 0.15, width = 0)) +
+  geom_smooth(method = "loess", se = TRUE, color = "lightgreen") +
+  labs(title = "DC counts (15 km) vs. HDI", x = "HDI (2010)", y = "DCs within 15 km")
+
+p_scatter_wage <- ggplot(data, aes(x = wage, y = dc15)) +
+  geom_point(alpha = 0.7, color = "darkgreen",
+             position = position_jitter(height = 0.15, width = 0)) +
+  geom_smooth(method = "loess", se = TRUE, color = "lightgreen") +
+  labs(title = "DC counts (15 km) vs. wage", x = "Avg monthly wage (2023)", y = "DCs within 15 km") +
+  scale_x_continuous(labels = label_number())
+
+p_scatter_health <- ggplot(data, aes(x = health_num, y = dc15)) +
+  geom_point(alpha = 0.7, color = "darkgreen",
+             position = position_jitter(height = 0.15, width = 0)) +
+  geom_smooth(method = "loess", se = TRUE, color = "lightgreen") +
+  labs(title = "DC counts (15 km) vs. health establishments", x = "Health establishments (2009)", y = "DCs within 15 km")
+
+(p_scatter_pm25 | p_scatter_hdi) / (p_scatter_wage | p_scatter_health)
+ggsave2("04_scatter_bivariate_15km.png", (p_scatter_pm25 | p_scatter_hdi) / (p_scatter_wage | p_scatter_health), w=11, h=8)
+
+
+# Independent variable correlation heatmap 
+pred_df <- data %>% dplyr::select(pm25, hdi, wage, health_num)
+cor_mat <- cor(pred_df, use = "pairwise.complete.obs")
+m <- reshape2::melt(cor_mat)
+
+p_cor <- ggplot(m, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(limits = c(0,1), low = "white", high = "#1A9850") +
+  coord_equal() +
+  labs(title = "Correlation between predictors", x = NULL, y = NULL, fill = "r") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+p_cor
+ggsave2("05_correlation_heatmap.png", p_cor, w=7, h=6)
+
+
+# Partial effects model 
+partial_effect_df <- function(model, data, var, n = 200) {
+  newdata <- data[rep(1, n), ]
+  for (v in names(newdata)) {
+    if (is.numeric(newdata[[v]])) newdata[[v]] <- median(data[[v]], na.rm = TRUE)}
+
+  rng <- range(data[[var]], na.rm = TRUE)
+  newdata[[var]] <- seq(rng[1], rng[2], length.out = n)
+
+  pr <- predict(model, newdata = newdata, type = "link", se.fit = TRUE)
+  newdata$fit_link <- pr$fit
+  newdata$se_link  <- pr$se.fit
+
+  newdata$fit <- exp(newdata$fit_link)
+  newdata$lo  <- exp(newdata$fit_link - 1.96 * newdata$se_link)
+  newdata$hi  <- exp(newdata$fit_link + 1.96 * newdata$se_link)
+
+  dplyr::select(newdata, dplyr::all_of(var), fit, lo, hi)}
+
+
+pe_pm25  <- partial_effect_df(gam_pois_dc15, data, "pm25")
+pe_hdi   <- partial_effect_df(gam_pois_dc15, data, "hdi")
+pe_wage  <- partial_effect_df(gam_pois_dc15, data, "wage")
+pe_health<- partial_effect_df(gam_pois_dc15, data, "health_num")
+
+p_pe_pm25 <- ggplot(pe_pm25, aes(x = pm25, y = fit)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.2, fill = "lightgreen") +
+  geom_line(linewidth = 1.1, color = "darkgreen") +
+  labs(title = "Partial effect (15 km): PM2.5", x = "PM2.5", y = "Predicted DCs within 15 km")
+
+p_pe_hdi <- ggplot(pe_hdi, aes(x = hdi, y = fit)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.2, fill = "lightgreen") +
+  geom_line(linewidth = 1.1, color = "darkgreen") +
+  labs(title = "Partial effect (15 km): HDI", x = "HDI (2010)", y = "Predicted DCs within 15 km")
+
+p_pe_wage <- ggplot(pe_wage, aes(x = wage, y = fit)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.2, fill = "lightgreen") +
+  geom_line(linewidth = 1.1, color = "darkgreen") +
+  labs(title = "Partial effect (15 km): Wage", x = "Avg monthly wage (2023)", y = "Predicted DCs within 15 km") +
+  scale_x_continuous(labels = label_number())
+
+p_pe_health <- ggplot(pe_health, aes(x = health_num, y = fit)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.2, fill = "lightgreen") +
+  geom_line(linewidth = 1.1, color = "darkgreen") +
+  labs(title = "Partial effect (15 km): Health establishments", x = "Health establishments (2009)", y = "Predicted DCs within 15 km")
+
+(p_pe_pm25 | p_pe_hdi) / (p_pe_wage | p_pe_health)
+ggsave2("06_partial_effects_gam_dc15.png", (p_pe_pm25 | p_pe_hdi) / (p_pe_wage | p_pe_health), w=11, h=8)
+
+
+# 7) Observed vs predicted for dc15
+data$pred_dc15 <- predict(gam_pois_dc15, type = "response")
+
+p_obs_pred <- ggplot(data, aes(x = pred_dc15, y = dc15)) +
+  geom_point(alpha = 0.75, color = "#2C7FB8") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Observed vs predicted DC counts (15 km Poisson GAM)",
+    x = "Predicted E[DCs within 15 km]",
+    y = "Observed DCs within 15 km")
+
+p_obs_pred
+ggsave2("07_observed_vs_predicted_dc15.png", p_obs_pred, w=7.5, h=5)
+```
