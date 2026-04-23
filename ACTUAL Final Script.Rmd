@@ -377,7 +377,7 @@ p_pe_health <- ggplot(pe_health, aes(x = health_num, y = fit)) +
 ggsave2("06_partial_effects_gam_dc15.png", (p_pe_pm25 | p_pe_hdi) / (p_pe_wage | p_pe_health), w=11, h=8)
 
 
-# 7) Observed vs predicted for dc15
+# Observed vs. predicted DC (not as helpful...) 
 data$pred_dc15 <- predict(gam_pois_dc15, type = "response")
 
 p_obs_pred <- ggplot(data, aes(x = pred_dc15, y = dc15)) +
