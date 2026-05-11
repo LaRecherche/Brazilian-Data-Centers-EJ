@@ -3,6 +3,7 @@ For EESCBC3020 Environmental Security. Data on Brazilian data center locations +
 
 To Use: 
 1) Download the Rio CSV.
-2) Download the ACTUAL Final Script markdown.
-3) Read the Rio CSV into the script, making sure to change the file path to match yours.
-4) Explore! Run new models! Make new visualizations! :) 
+2) Download the Rio shapefile. 
+3) Download the EJ_Brazil_DC R file.
+4) Read the Rio CSV and shapefile into the script, making sure to change the file path to match yours.
+5) Explore! Run new models! Make new visualizations! :) 
